@@ -30,13 +30,13 @@ def find_pvals(points, voltorbs, free_cells):
     try:
         pvals[0] = round( voltorbs / (voltorbs + free_cells), 3)
     except(ZeroDivisionError):
-        return pvals
+        return pvals, combos
 
     # s = sum([pvals[i] for i in pvals])
     # ev = round(sum([i * pvals[i] for i in pvals]), 3)
     # print("Sum:", s, "EV:", ev)
 
-    return pvals
+    return pvals, combos
     
 def get_most_recently_added_file(directory):
     # Get list of .png files in the directory with their full path
