@@ -29,6 +29,10 @@ def combine_combos(row_combos, col_combos):
         if val in col_vals:
             filtered_vals.add(val)
 
+    if len(filtered_vals) == 0:
+        print("EMPTY PVALS!!!")
+        print(row_combos, col_combos)
+
     if col_vals != row_vals:
         filtered_col_combos = []
         filtered_row_combos = []
@@ -83,17 +87,20 @@ def get_probs(pvals, row_combos, col_combos):
             col_probs[p] += (counts[p] / len(combo)) / len(col_combos)
     
     s = 0
+    # print()
+    # print(pvals, col_probs, row_probs)
     for p in probs:
         probs[p] = col_probs[p] * row_probs[p]
         s += probs[p]
+    # print(probs)
     for p in probs:
         probs[p] = round(probs[p] / s, 3)
     
     return probs
 
-points = 6  # Total sum
-voltorbs = 1
-free_cells = 2
+points = 5  # Total sum
+voltorbs = 0
+free_cells = 5
 row_combos = find_combos(points, voltorbs, free_cells)
 
 points = 7  # Total sum
@@ -110,7 +117,7 @@ print("MERGED COMBOS:", final_combos)
 print("Possible Vals:", pvals)
 print("Probs:", probs)
 
-choice = 2
+choice = 1
 final_combos[0] = updated_combos(choice, final_combos[0])
 final_combos[1] = updated_combos(choice, final_combos[1])
 

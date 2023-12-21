@@ -66,25 +66,30 @@ def find_most_overlapping_image(directory_path, extracts):
         most_similar_image_path = None
 
         # Iterate through each file in the directory
-        for filename in os.listdir(directory_path):
+        dirs = os.listdir(directory_path)
+        dirs.sort()
+        for filename in dirs:
             file_path = os.path.join(directory_path, filename)
 
             # Load the current image
             current_image = cv2.imread(file_path, cv2.IMREAD_UNCHANGED)
             if current_image is None:
                 continue
-
-            # Check if the images are the same size
-            if given_image.shape == current_image.shape:
+            
+            if given_image.shape[:-1] == current_image.shape[:-1]:
                 # Count the number of overlapping pixels
                 overlap = np.sum(given_image == current_image)
 
                 # Update the maximum overlap and the path of the most similar image
                 if overlap > max_overlap:
+                    # print(file_path, full_overlap, non_overlap)
                     max_overlap = overlap
                     most_similar_image_path = file_path
-                
-        nums.append(int(most_similar_image_path.split('.')[0].split('/')[-1]))
+                    # print(file_path)
+        
+        num = int(most_similar_image_path.split('.')[0].split('/')[-1])
+
+        nums.append(num)
 
     return nums
 
@@ -111,5 +116,6 @@ def get_cols_rows(image_path):
 
     return (cols, rows)
 
-# image_path = 'imgs/Screen Shot 2023-12-17 at 12.59.32 PM.png'  # Replace with your image path
-# get_cols_rows(image_path)
+# image_path = '/Users/raffukhondaker/Desktop/Screen Shot 2023-12-20 at 8.56.15 PM.png'  # Replace with your image path
+# print(get_cols_rows(image_path))
+

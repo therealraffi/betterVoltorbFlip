@@ -1,17 +1,21 @@
 from read import get_cols_rows
 from typing import List, Dict
-from utils import *
+from utils2 import *
 
 class HeaderCell:
     def __init__(self, points, voltorbs):
         self.voltorbs = voltorbs
         self.free_cells = 5 - voltorbs
         self.points = points
-        self.pvals = {i:0 for i in range(5)}
         self.combos = None
 
-    def calc_pvals(self):
-        self.pvals, self.combos = find_pvals(self.points, self.voltorbs, self.free_cells)
+    def calc_combos(self):
+        self.combos = find_combos(self.points, self.voltorbs, self.free_cells)
+
+    def update(self, val):
+        self.combos = updated_combos(val, self.combos)
+        self.points -= val
+        self.free_cells -= 1
 
     def __repr__(self):
         return f"{self.points}/{self.voltorbs}"
@@ -20,62 +24,53 @@ class HeaderCell:
         return self.__repr__()
 
 class GameCell:
-    def __init__(self, ri, ci, gb, pvals=None, best=False):
+    def __init__(self, ri, ci, gb, best=False):
         self.row_idx = ri
         self.col_idx  = ci
         self.gameboard: Gameboard = gb
-        self.pvals: Dict[float] = pvals
+        self.probs: Dict[float] = None
         self.solved = False
         self.best = best
 
-        self._calc_pvals()
+        self.calc_probs()
 
-    def _calc_pvals(self):
-        vals = [0,1,2,3]
-        self.pvals = {i:0 for i in vals}
-        s = 0
-
-        for v in vals:
-            self.pvals[v] = self.gameboard.row_headers[self.row_idx].pvals[v] * self.gameboard.col_headers[self.col_idx].pvals[v]
-            s += self.pvals[v]
-            # self.pvals[v] = (self.gameboard.row_headers[self.row_idx].pvals[v] + self.gameboard.row_headers[self.col_idx].pvals[v]) / 2
-            # self.pvals[v] = (self.gameboard.row_headers[self.row_idx].pvals[v])
-
-        if s == 0:
-            return
-
-        for v in vals:
-            self.pvals[v] = round(self.pvals[v] / s, 3)
+    def calc_probs(self):
+        combos, pvals = combine_combos(self.gameboard.row_headers[self.row_idx].combos, self.gameboard.col_headers[self.col_idx].combos)
+        if len(combos[1]) == 0:
+            print("EMPTY! on COL in cell")
+            print(self.row_idx, self.col_idx)
+        row_combos, col_combos = combos[0], combos[1]
+        self.probs = get_probs(pvals, row_combos, col_combos)
     
     def is_useful(self):
-        return (self.pvals[2] > 0 or self.pvals[3] > 0)
+        return (self.probs[2] > 0 or self.probs[3] > 0)
         
     def set_value(self, val):
         self.solved = True
         self.best = False
-        self.pvals = {i:0 for i in range(5)}
-        self.pvals[val] = 1
+        self.probs = {i:0 for i in range(4)}
+        self.probs[val] = 1
 
-        self.gameboard.row_headers[self.row_idx].points -= val
-        self.gameboard.row_headers[self.row_idx].free_cells -= 1
+        self.gameboard.row_headers[self.row_idx].update(val)
+        self.gameboard.col_headers[self.col_idx].update(val)
 
-        self.gameboard.col_headers[self.col_idx].points -= val
-        self.gameboard.col_headers[self.col_idx].free_cells -= 1
-
-        self.gameboard.recalc_pvals(self.row_idx, self.col_idx)
-
-        return len(self.pvals) == 1
+        self.gameboard.recalc_probs(self.row_idx, self.col_idx)
+        return len(self.probs) == 1
 
     def get_corners(self):
         corners = ['' for i in range(4)]
-        for v in self.pvals:
-            if self.pvals[v] != 0:
+        for v in self.probs:
+            if self.probs[v] != 0:
                 corners[v] = str(v)
         return corners
     
     def expected_val(self):
-        # return round(sum([i * self.pvals[i] for i in self.pvals]), 3)
-        return 1 - round(self.pvals[0], 3)
+        # return round(sum([i * self.probs[i] for i in self.probs]), 3)
+        # return round(((1 - self.probs[0])*sum([i * self.probs[i] for i in self.probs])), 3)
+
+        pvals = [k for k in self.probs if self.probs[k] > 0]
+        print(pvals,  (1 - self.probs[0]))
+        return sum(pvals) / len(pvals) * (1 - self.probs[0])
 
 
     def __repr__(self) -> str:
@@ -95,12 +90,13 @@ class Gameboard:
         for i in range(0, len(row_vals), 3):
             t, d, v = row_vals[i:i+3]
             row_cell = HeaderCell(t * 10 + d, v)  
-            row_cell.calc_pvals()         
+            row_cell.calc_combos()         
             self.row_headers.append(row_cell) 
             
             t, d, v = col_vals[i:i+3]
             col_cell = HeaderCell(t * 10 + d, v)  
-            col_cell.calc_pvals()         
+            print(col_cell.points, col_cell.voltorbs)
+            col_cell.calc_combos()         
             self.col_headers.append(col_cell) 
 
         best_val = 0
@@ -114,17 +110,33 @@ class Gameboard:
         
         self.board[best_coord[0]][best_coord[1]].best = True
     
-    def recalc_pvals(self, ri, ci):
-        self.col_headers[ci].calc_pvals()
-        self.row_headers[ri].calc_pvals()
+    def recalc_probs(self, ri, ci):
+        row_header: HeaderCell = self.row_headers[ri]
+        col_header: HeaderCell = self.col_headers[ci]
 
         for i in range(5):
             if not self.board[i][ci].solved:
-                self.board[i][ci]._calc_pvals()
+                # print("INTEREST", self.col_headers[4].combos)
+
+                combos, _ = combine_combos(self.row_headers[i].combos, col_header.combos)
+                if len(combos[1]) == 0:
+                    print("EMPTY! on ROW")
+                    print(self.row_headers[i].combos, col_header.combos)
+                    print(i, ci)
+
+                self.row_headers[i].combos = combos[0]
+                self.board[i][ci].calc_probs()
             
             if not self.board[ri][i].solved:
-                self.board[ri][i]._calc_pvals()
-        
+                combos, _ = combine_combos(row_header.combos, self.col_headers[i].combos)
+                if len(combos[1]) == 0:
+                    print("EMPTY! on COL")
+                    print(ri, i)
+
+                self.col_headers[i].combos = combos[1]
+                self.board[ri][i].calc_probs()  
+                
+
         best_val = 0
         best_coord = (0, 0)
         for i in range(5):
@@ -146,25 +158,27 @@ class Gameboard:
         formatted_row = " ".join(str(rc.__str__()) + ((4-len(rc.__str__())) * " ") for ri, rc in enumerate(self.col_headers))
         print(formatted_row)
 
-board = Gameboard()
-board.create_board("imgs/Screen Shot 2023-12-17 at 12.59.32 PM.png")
+# board = Gameboard()
+# directory_path = '/Users/raffukhondaker/Desktop'  # Replace with your directory path
+# board.create_board(get_most_recently_added_file(directory_path))
 
-board.print_board()
-# print(board.board[2][0].pvals)
-# print(board.board[2][1].pvals)
-# print(board.board[2][2].pvals)
-# print(board.board[2][3].pvals)
-# print(board.board[2][4].pvals)
 
-print("ROWS:")
-for i, row in enumerate(board.row_headers):
-    # print(i, row.pvals)
-    print(i, row.combos)
+# board.print_board()
+# # print(board.board[2][0].probs)
+# # print(board.board[2][1].probs)
+# # print(board.board[2][2].probs)
+# # print(board.board[2][3].probs)
+# # print(board.board[2][4].probs)
 
-print("COLS:")
-for i, col in enumerate(board.col_headers):
-    # print(i, col.pvals)
-    print(i, col.combos)
+# print("ROWS:")
+# for i, row in enumerate(board.row_headers):
+#     # print(i, row.probs)
+#     print(i, row.combos)
+
+# print("COLS:")
+# for i, col in enumerate(board.col_headers):
+#     # print(i, col.probs)
+#     print(i, col.combos)
 
 
 # print()
@@ -193,4 +207,4 @@ for i, col in enumerate(board.col_headers):
 
 # r=3
 # c=1
-# print(board.board[r][c].pvals)
+# print(board.board[r][c].probs)
